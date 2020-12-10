@@ -7,10 +7,18 @@ import (
 	"golang.org/x/image/colornames"
 )
 
+const (
+	width, height = 640, 480
+)
+
+var (
+	x, y float64 = width / 2, height / 2
+)
+
 func run() {
 	cfg := pixelgl.WindowConfig{
 		Title:  "Nada",
-		Bounds: pixel.R(0, 0, 640, 480),
+		Bounds: pixel.R(0, 0, width, height),
 		VSync:  true,
 	}
 	win, err := pixelgl.NewWindow(cfg)
@@ -21,8 +29,12 @@ func run() {
 	imd := imdraw.New(nil)
 
 	imd.Color = colornames.Black
-	imd.Push(pixel.V(200, 0), pixel.V(200, 480))
+	imd.Push(pixel.V(200, 0), pixel.V(200, height))
 	imd.Line(1)
+
+	imd.Color = colornames.Red
+	imd.Push(pixel.V(x, y))
+	imd.Circle(5, 0)
 
 	for !win.Closed() {
 		win.Clear(colornames.Skyblue)

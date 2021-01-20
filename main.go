@@ -31,7 +31,7 @@ var walls = []pixel.Vec{
 	pixel.V(400, 150),
 }
 
-var projectedWalls = []pixel.Vec{
+var rotatedWalls = []pixel.Vec{
 	pixel.ZV,
 	pixel.ZV,
 	pixel.ZV,
@@ -59,37 +59,84 @@ func processInput(win *pixelgl.Window, dt float64) {
 	}
 }
 
-func updateWorld(win *pixelgl.Window) {
+func projectWorld(win *pixelgl.Window) {
 
+	// rotate the world based on player direction
 	cs := math.Cos(math.Pi/2 - p.dir)
 	sn := math.Sin(math.Pi/2 - p.dir)
 	for i, wall := range walls {
-		projectedWalls[i].X = (wall.X-p.x)*cs - (wall.Y-p.y)*sn + win.Bounds().Center().X
-		projectedWalls[i].Y = (wall.X-p.x)*sn + (wall.Y-p.y)*cs + win.Bounds().Center().Y
+		rotatedWalls[i].X = (wall.X-p.x)*cs - (wall.Y-p.y)*sn + win.Bounds().Center().X
+		rotatedWalls[i].Y = (wall.X-p.x)*sn + (wall.Y-p.y)*cs + win.Bounds().Center().Y
 	}
 
 	visibleWalls = nil
-	for i := 0; i < len(projectedWalls)-1; i++ {
-		visible := true
-		if projectedWalls[i].Y < win.Bounds().H()/2 {
-			visible = false
+	for i := 0; i < len(rotatedWalls)-1; i++ {
+
+		// are both ends of the wall visible?
+		visibleA, visibleB := true, true
+		if rotatedWalls[i].Y < win.Bounds().H()/2 {
+			visibleA = false
 		}
-		if visible && projectedWalls[i+1].Y < win.Bounds().H()/2 {
-			visible = false
+		if rotatedWalls[i+1].Y < win.Bounds().H()/2 {
+			visibleB = false
 		}
-		if visible {
-			visibleWalls = append(visibleWalls, projectedWalls[i])
-			visibleWalls = append(visibleWalls, projectedWalls[i+1])
+
+		if visibleA && visibleB {
+			// both wall ends visible
+			visibleWalls = append(visibleWalls, rotatedWalls[i])
+			visibleWalls = append(visibleWalls, rotatedWalls[i+1])
+		} else if (visibleA && !visibleB) || (!visibleA && visibleB) {
+			// only one end visible: clip to keep visible wall part
+			var a, b pixel.Vec
+			if visibleA {
+				a = rotatedWalls[i]
+				b = rotatedWalls[i+1]
+			} else {
+				a = rotatedWalls[i+1]
+				b = rotatedWalls[i]
+			}
+			m := (b.Y - a.Y) / (b.X - a.X)
+			p := a.Y - (m * a.X)
+			x := (win.Bounds().H()/2 - p) / m // y = (m*x) + p
+			visibleWalls = append(visibleWalls, a)
+			visibleWalls = append(visibleWalls, pixel.V(x, win.Bounds().H()/2))
 		}
 	}
 
-	// fix non consequtive walls (this is the case when first & last walls are visible)
-	if len(visibleWalls) > 1 && visibleWalls[0].Eq(visibleWalls[len(visibleWalls)-1]) {
-		_, visibleWalls = visibleWalls[0], visibleWalls[1:]
-		var wall pixel.Vec
-		wall, visibleWalls = visibleWalls[0], visibleWalls[1:]
-		visibleWalls = append(visibleWalls, wall)
+	// // perspective projection
+	// for i := range visibleWalls {
+	// 	visibleWalls[i].X = visibleWalls[i].X / (visibleWalls[i].Y - win.Bounds().H()/2)
+	// }
+
+}
+
+func drawWorld(win *pixelgl.Window) {
+	imd := imdraw.New(nil)
+
+	// fixed player position
+	imd.Color = colornames.Red
+	imd.Push(win.Bounds().Center())
+	imd.Circle(3, 0)
+
+	// fixed player direction
+	imd.Push(win.Bounds().Center(), win.Bounds().Center().Add(pixel.V(0, 15)))
+	imd.Line(1)
+	// camera plane
+	imd.Color = colornames.White
+	imd.Push(
+		pixel.V(0, win.Bounds().H()/2),
+		pixel.V(win.Bounds().W(), win.Bounds().H()/2),
+	)
+	imd.Line(1)
+
+	// rotated world
+	imd.Color = colornames.Green
+	for i := 0; i < len(visibleWalls)-1; i += 2 {
+		imd.Push(visibleWalls[i])
+		imd.Push(visibleWalls[i+1])
+		imd.Line(1)
 	}
+	imd.Draw(win)
 }
 
 func drawMinimap(win *pixelgl.Window, minimap *pixelgl.Canvas) {
@@ -127,35 +174,6 @@ func drawMinimap(win *pixelgl.Window, minimap *pixelgl.Canvas) {
 	)
 }
 
-func drawWorld(win *pixelgl.Window) {
-	imd := imdraw.New(nil)
-
-	// fixed player position
-	imd.Color = colornames.Red
-	imd.Push(win.Bounds().Center())
-	imd.Circle(3, 0)
-
-	// fixed player direction
-	imd.Push(win.Bounds().Center(), win.Bounds().Center().Add(pixel.V(0, 15)))
-	imd.Line(1)
-	// camera plane
-	imd.Color = colornames.White
-	imd.Push(
-		pixel.V(0, win.Bounds().H()/2),
-		pixel.V(win.Bounds().W(), win.Bounds().H()/2),
-	)
-	imd.Line(1)
-
-	// rotated world
-	imd.Color = colornames.Green
-	for i := 0; i < len(visibleWalls)-1; i++ {
-		imd.Push(visibleWalls[i])
-		imd.Push(visibleWalls[i+1])
-		imd.Line(1)
-	}
-	imd.Draw(win)
-}
-
 func run() {
 	cfg := pixelgl.WindowConfig{
 		Title:  "Nada",
@@ -182,7 +200,7 @@ func run() {
 
 		processInput(win, dt)
 
-		updateWorld(win)
+		projectWorld(win)
 
 		win.Clear(colornames.Black)
 		drawWorld(win)

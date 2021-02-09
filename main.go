@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	rotationSpeed = 3
-	walkSpeed     = 30
+	rotationSpeed = 2
+	walkSpeed     = 20
 )
 
 type player struct {
@@ -40,7 +40,7 @@ var rotatedWalls = []pixel.Vec{
 	pixel.ZV,
 }
 
-var visibleWalls []pixel.Vec
+var visibleWalls, screenWalls []pixel.Vec
 
 func processInput(win *pixelgl.Window, dt float64) {
 	if win.Pressed(pixelgl.KeyLeft) {
@@ -103,10 +103,16 @@ func projectWorld(win *pixelgl.Window) {
 		}
 	}
 
-	// // perspective projection
-	// for i := range visibleWalls {
-	// 	visibleWalls[i].X = visibleWalls[i].X / (visibleWalls[i].Y - win.Bounds().H()/2)
-	// }
+	// https://en.wikipedia.org/wiki/3D_projection#Diagram
+	screenWalls = nil
+	for i := range visibleWalls {
+		x := (visibleWalls[i].X - win.Bounds().W()/2) * 240 / (visibleWalls[i].Y - win.Bounds().H()/2)
+		y := visibleWalls[i].Y - win.Bounds().H()/2 // pb sur le y. + pb hors champ
+		if y > win.Bounds().H()/2 {
+			y = win.Bounds().H() / 2
+		}
+		screenWalls = append(screenWalls, pixel.V(x+win.Bounds().W()/2, y))
+	}
 
 }
 
@@ -136,6 +142,22 @@ func drawWorld(win *pixelgl.Window) {
 		imd.Push(visibleWalls[i+1])
 		imd.Line(1)
 	}
+
+	// screen
+	imd.Color = colornames.Red
+	// for i := range screenWalls {
+	// 	imd.Push(screenWalls[i])
+	// 	imd.Push(pixel.V(screenWalls[i].X, win.Bounds().H()-screenWalls[i].Y))
+	// 	imd.Line(1)
+	// }
+	for i := 0; i < len(screenWalls)-1; i += 2 {
+		imd.Push(screenWalls[i])
+		imd.Push(screenWalls[i+1])
+		imd.Push(pixel.V(screenWalls[i+1].X, win.Bounds().H()-screenWalls[i+1].Y))
+		imd.Push(pixel.V(screenWalls[i].X, win.Bounds().H()-screenWalls[i].Y))
+		imd.Polygon(1)
+	}
+
 	imd.Draw(win)
 }
 
